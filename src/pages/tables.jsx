@@ -6,10 +6,11 @@ export default function Tables() {
   const [loading, setLoading] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
-  const [formMode, setFormMode] = useState("add"); // "add" or "update"
+  const [formMode, setFormMode] = useState("add");
   const [formData, setFormData] = useState({});
   const [editId, setEditId] = useState(null);
 
+  // Include transactions, but read-only (except delete)
   const tables = ["users", "products", "suppliers", "customers", "transactions"];
 
   // Fetch rows
@@ -33,7 +34,7 @@ export default function Tables() {
     fetchData();
   }, [selectedTable]);
 
-  // Open form for Add / Update
+  // Open form for Add / Update (not for transactions)
   const openForm = (mode, row = {}) => {
     setFormMode(mode);
     setFormData(row);
@@ -41,12 +42,11 @@ export default function Tables() {
     setShowForm(true);
   };
 
-  // Handle input change
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Submit form
+  // Submit form (only for non-transaction tables)
   const handleSubmit = async () => {
     try {
       if (formMode === "add") {
@@ -70,7 +70,7 @@ export default function Tables() {
     }
   };
 
-  // Delete record
+  // Delete record (works for all tables, including transactions)
   const handleDelete = async (id) => {
     try {
       await fetch(`http://localhost:3000/${selectedTable}/${id}`, {
@@ -84,9 +84,8 @@ export default function Tables() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0f172a] to-[#1e293b] text-white px-6 py-12">
-      {/* Page Title */}
       <h2 className="text-4xl font-extrabold text-center mb-10">
-        <span className="text-[hsl(200,100%,70%)]">Database</span> Manager
+        <span className="text-[hsl(200,100%,70%)]">Welcome back</span> Admin
       </h2>
 
       {/* Dropdown Selector */}
@@ -105,8 +104,8 @@ export default function Tables() {
         </select>
       </div>
 
-      {/* Add Button (only when a table is selected) */}
-      {selectedTable && (
+      {/* Add Button (hidden for transactions) */}
+      {selectedTable && selectedTable !== "transactions" && (
         <div className="flex justify-end max-w-6xl mx-auto mb-4">
           <button
             onClick={() => openForm("add")}
@@ -145,12 +144,15 @@ export default function Tables() {
                     </td>
                   ))}
                   <td className="p-4 space-x-2">
-                    <button
-                      onClick={() => openForm("update", row)}
-                      className="px-3 py-1 bg-yellow-500 text-black rounded-lg hover:scale-105 transition"
-                    >
-                      Update
-                    </button>
+                    {/* Hide Update for transactions */}
+                    {selectedTable !== "transactions" && (
+                      <button
+                        onClick={() => openForm("update", row)}
+                        className="px-3 py-1 bg-yellow-500 text-black rounded-lg hover:scale-105 transition"
+                      >
+                        Update
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDelete(row[Object.keys(row)[0]])}
                       className="px-3 py-1 bg-red-500 text-white rounded-lg hover:scale-105 transition"
@@ -169,13 +171,14 @@ export default function Tables() {
         <p className="text-center text-gray-400">Select a table to view data.</p>
       )}
 
-      {/* Form Modal */}
-      {showForm && (
+      {/* Form Modal (not for transactions) */}
+      {showForm && selectedTable !== "transactions" && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
           <div className="bg-[#1e293b] p-6 rounded-2xl shadow-xl w-96">
             <h3 className="text-xl font-bold mb-4 capitalize">
               {formMode} {selectedTable} record
             </h3>
+
             {Object.keys(data[0] || {}).map((col) =>
               col.includes("id") || col.includes("created_at") ? null : (
                 <div key={col} className="mb-3">
@@ -190,6 +193,7 @@ export default function Tables() {
                 </div>
               )
             )}
+
             <div className="flex justify-end gap-3 mt-4">
               <button
                 onClick={() => setShowForm(false)}
