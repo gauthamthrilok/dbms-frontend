@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import axios from "axios";
 
 export default function Tables() {
   const [selectedTable, setSelectedTable] = useState("");
@@ -10,23 +11,30 @@ export default function Tables() {
   const [formData, setFormData] = useState({});
   const [editId, setEditId] = useState(null);
 
-  // Include transactions, but read-only (except delete)
   const tables = ["users", "products", "suppliers", "customers", "transactions"];
 
-  // Fetch rows
-  const fetchData = () => {
+  const fetchData = async () => {
     if (selectedTable) {
-      setLoading(true);
-      fetch(`http://localhost:3000/${selectedTable}`)
-        .then((res) => res.json())
-        .then((rows) => {
-          setData(rows);
-          setLoading(false);
-        })
-        .catch((err) => {
-          console.error("Error fetching data:", err);
-          setLoading(false);
-        });
+      try {
+        setLoading(true);
+        const res = await axios.get(`http://localhost:3000/${selectedTable}`);
+
+        let rows = res.data;
+
+        // Special handling for users: replace password_hash with "********"
+        if (selectedTable === "users") {
+          rows = rows.map((row) => ({
+            ...row,
+            password: "********", // show placeholder
+          }));
+        }
+
+        setData(rows);
+      } catch (err) {
+        console.error("Error fetching data:", err);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -34,7 +42,6 @@ export default function Tables() {
     fetchData();
   }, [selectedTable]);
 
-  // Open form for Add / Update (not for transactions)
   const openForm = (mode, row = {}) => {
     setFormMode(mode);
     setFormData(row);
@@ -46,22 +53,39 @@ export default function Tables() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Submit form (only for non-transaction tables)
   const handleSubmit = async () => {
     try {
-      if (formMode === "add") {
-        await fetch(`http://localhost:3000/${selectedTable}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        });
+      if (selectedTable === "users") {
+        if (formMode === "add") {
+          // Require username + password, send role = staff
+          await axios.post(`http://localhost:3000/${selectedTable}`, {
+            username: formData.username,
+            password: formData.password,
+            role: "staff",
+          });
+        } else {
+          // Update: allow username, optional password
+          await axios.put(
+            `http://localhost:3000/${selectedTable}/${editId}`,
+            {
+              username: formData.username,
+              password: formData.password || undefined,
+              role: formData.role || "staff",
+            }
+          );
+        }
       } else {
-        await fetch(`http://localhost:3000/${selectedTable}/${editId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        });
+        // Other tables (no password logic)
+        if (formMode === "add") {
+          await axios.post(`http://localhost:3000/${selectedTable}`, formData);
+        } else {
+          await axios.put(
+            `http://localhost:3000/${selectedTable}/${editId}`,
+            formData
+          );
+        }
       }
+
       setShowForm(false);
       setFormData({});
       fetchData();
@@ -70,12 +94,9 @@ export default function Tables() {
     }
   };
 
-  // Delete record (works for all tables, including transactions)
   const handleDelete = async (id) => {
     try {
-      await fetch(`http://localhost:3000/${selectedTable}/${id}`, {
-        method: "DELETE",
-      });
+      await axios.delete(`http://localhost:3000/${selectedTable}/${id}`);
       fetchData();
     } catch (err) {
       console.error("Error deleting record:", err);
@@ -144,7 +165,6 @@ export default function Tables() {
                     </td>
                   ))}
                   <td className="p-4 space-x-2">
-                    {/* Hide Update for transactions */}
                     {selectedTable !== "transactions" && (
                       <button
                         onClick={() => openForm("update", row)}
@@ -171,7 +191,7 @@ export default function Tables() {
         <p className="text-center text-gray-400">Select a table to view data.</p>
       )}
 
-      {/* Form Modal (not for transactions) */}
+      {/* Form Modal */}
       {showForm && selectedTable !== "transactions" && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
           <div className="bg-[#1e293b] p-6 rounded-2xl shadow-xl w-96">
@@ -179,18 +199,48 @@ export default function Tables() {
               {formMode} {selectedTable} record
             </h3>
 
-            {Object.keys(data[0] || {}).map((col) =>
-              col.includes("id") || col.includes("created_at") ? null : (
-                <div key={col} className="mb-3">
-                  <label className="block text-sm mb-1 capitalize">{col}</label>
+            {selectedTable === "users" ? (
+              <>
+                <div className="mb-3">
+                  <label className="block text-sm mb-1">Username</label>
                   <input
                     type="text"
-                    name={col}
-                    value={formData[col] || ""}
+                    name="username"
+                    value={formData.username || ""}
                     onChange={handleChange}
                     className="w-full px-3 py-2 rounded-lg text-black"
                   />
                 </div>
+                <div className="mb-3">
+                  <label className="block text-sm mb-1">
+                    Password{" "}
+                    {formMode === "update" && (
+                      <span className="text-gray-400">(leave blank to keep old)</span>
+                    )}
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={formData.password || ""}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 rounded-lg text-black"
+                  />
+                </div>
+              </>
+            ) : (
+              Object.keys(data[0] || {}).map((col) =>
+                col.includes("id") || col.includes("created_at") ? null : (
+                  <div key={col} className="mb-3">
+                    <label className="block text-sm mb-1 capitalize">{col}</label>
+                    <input
+                      type="text"
+                      name={col}
+                      value={formData[col] || ""}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 rounded-lg text-black"
+                    />
+                  </div>
+                )
               )
             )}
 
