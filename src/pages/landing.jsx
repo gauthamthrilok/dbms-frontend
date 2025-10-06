@@ -2,16 +2,12 @@
 
 import { Package, Truck, BarChart3 } from "lucide-react";
 // Import useEffect
-import { useState, useEffect, React } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Landing() {
   const navigate = useNavigate();
   const [isLogged, setLogged] = useState(false);
-  
-  // This line is correct and will now receive the state properly
-  const userRole = localStorage.getItem("userRole");
-  const isAdmin = userRole === "admin";
 
   const handleSignIn = () => {
     console.log("sign in clicked");
@@ -19,7 +15,9 @@ export default function Landing() {
   };
 
   const handleStart = () => {
-    // This logic will now work as expected
+    const userRole = localStorage.getItem("userRole");
+    const isAdmin = userRole === "admin";
+
     if (isAdmin && isLogged) {
       navigate("/admintables");
     } else if (isLogged) {
@@ -27,7 +25,10 @@ export default function Landing() {
     } else {
       navigate("/signin");
     }
+
+    console.log(`Get Started clicked → Admin = ${isAdmin}, isLogged = ${isLogged}`);
   };
+
 
   // Use useEffect for side-effects like checking localStorage
   useEffect(() => {

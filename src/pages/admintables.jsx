@@ -55,35 +55,24 @@ export default function Tables() {
 
   const handleSubmit = async () => {
     try {
-      if (selectedTable === "users") {
-        if (formMode === "add") {
-          // Require username + password, send role = staff
-          await axios.post(`http://localhost:3000/${selectedTable}`, {
-            username: formData.username,
-            password: formData.password,
-            role: "staff",
-          });
-        } else {
-          // Update: allow username, optional password
-          await axios.put(
-            `http://localhost:3000/${selectedTable}/${editId}`,
-            {
-              username: formData.username,
-              password: formData.password || undefined,
-              role: formData.role || "staff",
-            }
-          );
-        }
+      const token = localStorage.getItem("token");
+      const config = {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      };
+
+      if (!token) {
+        console.error("No token found!");
+        return;
+      }
+
+      if (formMode === "add") {
+        // Change 'api' back to 'axios'
+        await axios.post(`http://localhost:3000/${selectedTable}`, formData, config);
       } else {
-        // Other tables (no password logic)
-        if (formMode === "add") {
-          await axios.post(`http://localhost:3000/${selectedTable}`, formData);
-        } else {
-          await axios.put(
-            `http://localhost:3000/${selectedTable}/${editId}`,
-            formData
-          );
-        }
+        // Change 'api' back to 'axios'
+        await axios.put(`http://localhost:3000/${selectedTable}/${editId}`, formData, config);
       }
 
       setShowForm(false);
@@ -96,8 +85,17 @@ export default function Tables() {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`http://localhost:3000/${selectedTable}/${id}`);
-      fetchData();
+      const token = localStorage.getItem("token");
+
+      if (token) {
+        // Change 'api' back to 'axios'
+        await axios.delete(`http://localhost:3000/${selectedTable}/${id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        fetchData();
+      }
     } catch (err) {
       console.error("Error deleting record:", err);
     }

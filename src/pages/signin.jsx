@@ -18,12 +18,14 @@ export default function LoginPage() {
         username,
         password,
       });
+      console.log(res.data);
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("userRole", res.data.role);
       alert("Login successful!");
 
       // Determine if the user is an admin from the response
       const userIsAdmin = res.data.role === "admin";
+      console.log("User is admin:", userIsAdmin);
 
       // Pass the admin status directly in the navigation state
       navigate("/", { state: { isAdmin: userIsAdmin } });
