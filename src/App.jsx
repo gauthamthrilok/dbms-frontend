@@ -1,7 +1,9 @@
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { Route, Routes, Navigate } from 'react-router-dom';
 import Landing from './pages/landing';
-import Tables from './pages/tables';
-import './App.css'
+import AdminTables from './pages/admintables';
+import StaffTables from './pages/stafftables';
+import SignIn from './pages/signin';
+import SignUp from './pages/signup';
 
 function App() {
 
@@ -9,7 +11,10 @@ function App() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="*" element={<Navigate to="/" replace />} />
-      <Route path="/tables" element={<Tables/>} />
+      <Route path="/admintables" element={<AdminTables/>} />
+      <Route path="/stafftables" element={<StaffTables/>} />
+      <Route path="/signin" element={<SignIn/>} />
+      <Route path="/signup" element={<SignUp/>} />
     </Routes>
   )
 }
