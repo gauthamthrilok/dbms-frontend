@@ -85,7 +85,7 @@ export default function Tables() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0f172a] to-[#1e293b] text-white px-6 py-12">
       <h2 className="text-4xl font-extrabold text-center mb-10">
-        <span className="text-[hsl(200,100%,70%)]">Welcome back</span> Admin
+        <span className="text-[hsl(200,100%,70%)]">Welcome back</span> Staff
       </h2>
 
       {/* Dropdown Selector */}
