@@ -1,11 +1,34 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
+// Define the structure for your forms here.
+const tableSchemas = {
+  users: [
+    { name: "username", type: "text" },
+    { name: "password", type: "password", note: "(leave blank to keep old)" }
+  ],
+  products: [
+    { name: "product_name", type: "text" },
+    { name: "category", type: "text" },
+    { name: "unit", type: "text" },
+    { name: "unit_price", type: "number" },
+    { name: "reorder_level", type: "number" }
+  ],
+  suppliers: [
+    { name: "supplier_name", type: "text" },
+    { name: "contact_info", type: "text" },
+    { name: "address", type: "text" }
+  ],
+  customers: [
+    { name: "customer_name", type: "text" },
+    { name: "contact_info", type: "text" }
+  ]
+};
+
 export default function Tables() {
   const [selectedTable, setSelectedTable] = useState("");
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const [showForm, setShowForm] = useState(false);
   const [formMode, setFormMode] = useState("add");
   const [formData, setFormData] = useState({});
@@ -14,27 +37,15 @@ export default function Tables() {
   const tables = ["users", "products", "suppliers", "customers", "transactions"];
 
   const fetchData = async () => {
-    if (selectedTable) {
-      try {
-        setLoading(true);
-        const res = await axios.get(`http://localhost:3000/${selectedTable}`);
-
-        let rows = res.data;
-
-        // Special handling for users: replace password_hash with "********"
-        if (selectedTable === "users") {
-          rows = rows.map((row) => ({
-            ...row,
-            password: "********", // show placeholder
-          }));
-        }
-
-        setData(rows);
-      } catch (err) {
-        console.error("Error fetching data:", err);
-      } finally {
-        setLoading(false);
-      }
+    if (!selectedTable) return;
+    try {
+      setLoading(true);
+      const res = await axios.get(`http://localhost:3000/${selectedTable}`);
+      setData(res.data);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -44,55 +55,53 @@ export default function Tables() {
 
   const openForm = (mode, row = {}) => {
     setFormMode(mode);
-    setFormData(row);
+    setFormData(mode === 'add' ? {} : row);
     setEditId(mode === "update" ? row[Object.keys(row)[0]] : null);
     setShowForm(true);
   };
 
+  // FIXED: This function now correctly handles number types
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value, type } = e.target;
+    setFormData({
+      ...formData,
+      [name]: type === 'number' ? parseFloat(value) || null : value,
+    });
   };
 
   const handleSubmit = async () => {
     try {
       const token = localStorage.getItem("token");
-      const config = {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      };
+      const config = { headers: { Authorization: `Bearer ${token}` } };
 
-      if (!token) {
-        console.error("No token found!");
-        return;
+      if (!token) return console.error("No token found!");
+
+      let dataToSend = { ...formData };
+      if (selectedTable === "users" && formMode === "update" && !dataToSend.password) {
+        delete dataToSend.password;
       }
 
       if (formMode === "add") {
-        // Change 'api' back to 'axios'
-        await axios.post(`http://localhost:3000/${selectedTable}`, formData, config);
+        await axios.post(`http://localhost:3000/${selectedTable}`, dataToSend, config);
       } else {
-        // Change 'api' back to 'axios'
-        await axios.put(`http://localhost:3000/${selectedTable}/${editId}`, formData, config);
+        await axios.put(`http://localhost:3000/${selectedTable}/${editId}`, dataToSend, config);
       }
 
       setShowForm(false);
       setFormData({});
       fetchData();
     } catch (err) {
-      console.error("Error submitting form:", err);
+      // IMPORTANT: Check your browser console for errors from the backend!
+      console.error("Error submitting form:", err.response?.data || err.message);
     }
   };
 
   const handleDelete = async (id) => {
     try {
       const token = localStorage.getItem("token");
-
       if (token) {
-        // Change 'api' back to 'axios'
         await axios.delete(`http://localhost:3000/${selectedTable}/${id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
         fetchData();
       }
@@ -143,23 +152,18 @@ export default function Tables() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#334155] text-[hsl(200,100%,70%)]">
-                {Object.keys(data[0]).map((col) => (
-                  <th key={col} className="p-4 capitalize">
-                    {col}
-                  </th>
+                {Object.keys(data[0] || {}).map((col) => (
+                  <th key={col} className="p-4 capitalize">{col.replace(/_/g, " ")}</th>
                 ))}
                 <th className="p-4">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {data.map((row, i) => (
-                <tr
-                  key={i}
-                  className="border-b border-gray-700 hover:bg-[#2d3b52] transition-colors"
-                >
-                  {Object.values(row).map((val, j) => (
-                    <td key={j} className="p-4">
-                      {val !== null ? val.toString() : "—"}
+              {data.map((row) => (
+                <tr key={row[Object.keys(row)[0]]} className="border-b border-gray-700 hover:bg-[#2d3b52] transition-colors">
+                  {Object.entries(row).map(([key, val]) => (
+                    <td key={key} className="p-4">
+                      {key.includes("password") ? "********" : (val !== null ? val.toString() : "—")}
                     </td>
                   ))}
                   <td className="p-4 space-x-2">
@@ -194,67 +198,30 @@ export default function Tables() {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
           <div className="bg-[#1e293b] p-6 rounded-2xl shadow-xl w-96">
             <h3 className="text-xl font-bold mb-4 capitalize">
-              {formMode} {selectedTable} record
+              {formMode} {selectedTable.endsWith('s') ? selectedTable.slice(0, -1) : selectedTable} Record
             </h3>
 
-            {selectedTable === "users" ? (
-              <>
-                <div className="mb-3">
-                  <label className="block text-sm mb-1">Username</label>
-                  <input
-                    type="text"
-                    name="username"
-                    value={formData.username || ""}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 rounded-lg text-black"
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="block text-sm mb-1">
-                    Password{" "}
-                    {formMode === "update" && (
-                      <span className="text-gray-400">(leave blank to keep old)</span>
-                    )}
-                  </label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password || ""}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 rounded-lg text-black"
-                  />
-                </div>
-              </>
-            ) : (
-              Object.keys(data[0] || {}).map((col) =>
-                col.includes("id") || col.includes("created_at") ? null : (
-                  <div key={col} className="mb-3">
-                    <label className="block text-sm mb-1 capitalize">{col}</label>
-                    <input
-                      type="text"
-                      name={col}
-                      value={formData[col] || ""}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 rounded-lg text-black"
-                    />
-                  </div>
-                )
-              )
-            )}
+            {(tableSchemas[selectedTable] || []).map((field) => (
+              <div key={field.name} className="mb-3">
+                <label className="block text-sm mb-1 capitalize">
+                  {field.name.replace("_", " ")}
+                  {formMode === "update" && field.note && (
+                    <span className="text-gray-400"> {field.note}</span>
+                  )}
+                </label>
+                <input
+                  type={field.type || "text"}
+                  name={field.name}
+                  value={formData[field.name] || ""}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 rounded-lg text-black"
+                />
+              </div>
+            ))}
 
             <div className="flex justify-end gap-3 mt-4">
-              <button
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2 bg-gray-500 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                className="px-4 py-2 bg-[hsl(200,100%,70%)] rounded-lg font-bold"
-              >
-                Save
-              </button>
+              <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-500 rounded-lg">Cancel</button>
+              <button onClick={handleSubmit} className="px-4 py-2 bg-[hsl(200,100%,70%)] rounded-lg font-bold">Save</button>
             </div>
           </div>
         </div>
