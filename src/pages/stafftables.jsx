@@ -1,84 +1,112 @@
 import { useState, useEffect } from "react";
+import axios from "axios";
 
-export default function Tables() {
-  const [selectedTable, setSelectedTable] = useState("");
+// Create and configure the axios instance
+const api = axios.create({
+  baseURL: "http://localhost:3000",
+});
+
+// Use an interceptor to add the auth token to every request
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Define the structure for your forms
+const tableSchemas = {
+  products: [
+    { name: "product_name", type: "text", placeholder: "e.g., Coffee Beans" },
+    { name: "category", type: "text", placeholder: "e.g., Beverages" },
+    { name: "unit", type: "text", placeholder: "e.g., kg" },
+    { name: "unit_price", type: "number", placeholder: "e.g., 200.00" },
+    { name: "reorder_level", type: "number", placeholder: "e.g., 10" },
+  ],
+  transactions: [
+    { name: "product_id", type: "number", placeholder: "ID of the product" },
+    // CHANGED: This is now a dropdown to ensure valid input
+    { 
+      name: "transaction_type", 
+      type: "select", 
+      options: ["IN", "OUT"] 
+    },
+    { name: "quantity", type: "number", placeholder: "e.g., 50" },
+    { name: "supplier_id", type: "number", placeholder: "ID for 'IN' type" },
+    { name: "customer_id", type: "number", placeholder: "ID for 'OUT' type" },
+  ],
+};
+
+export default function StaffTables() {
   const [data, setData] = useState([]);
+  const [selectedTable, setSelectedTable] = useState("");
   const [loading, setLoading] = useState(false);
-
   const [showForm, setShowForm] = useState(false);
   const [formMode, setFormMode] = useState("add");
   const [formData, setFormData] = useState({});
   const [editId, setEditId] = useState(null);
 
-  // Include transactions, but read-only (except delete)
   const tables = ["products", "transactions"];
 
-  // Fetch rows
-  const fetchData = () => {
+  // Fetch data for the main table when `selectedTable` changes
+  useEffect(() => {
     if (selectedTable) {
       setLoading(true);
-      fetch(`http://localhost:3000/${selectedTable}`)
-        .then((res) => res.json())
-        .then((rows) => {
-          setData(rows);
-          setLoading(false);
-        })
-        .catch((err) => {
-          console.error("Error fetching data:", err);
-          setLoading(false);
-        });
+      api.get(`/${selectedTable}`)
+        .then((res) => setData(res.data))
+        .catch((err) => console.error("Error fetching data:", err.response || err))
+        .finally(() => setLoading(false));
+    } else {
+      setData([]);
     }
-  };
-
-  useEffect(() => {
-    fetchData();
   }, [selectedTable]);
 
-  // Open form for Add / Update (not for transactions)
   const openForm = (mode, row = {}) => {
     setFormMode(mode);
-    setFormData(row);
+    setFormData(mode === 'add' ? {} : row);
     setEditId(mode === "update" ? row[Object.keys(row)[0]] : null);
     setShowForm(true);
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value, type } = e.target;
+    setFormData({
+      ...formData,
+      [name]: type === 'number' ? parseFloat(value) || null : value,
+    });
   };
 
-  // Submit form (only for non-transaction tables)
   const handleSubmit = async () => {
     try {
       if (formMode === "add") {
-        await fetch(`http://localhost:3000/${selectedTable}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        });
+        await api.post(`/${selectedTable}`, formData);
       } else {
-        await fetch(`http://localhost:3000/${selectedTable}/${editId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        });
+        await api.put(`/${selectedTable}/${editId}`, formData);
       }
       setShowForm(false);
       setFormData({});
-      fetchData();
+      if (selectedTable) {
+        setLoading(true);
+        const res = await api.get(`/${selectedTable}`);
+        setData(res.data);
+        setLoading(false);
+      }
     } catch (err) {
-      console.error("Error submitting form:", err);
+      console.error("Error submitting form:", err.response?.data || err.message);
     }
   };
 
-  // Delete record (works for all tables, including transactions)
   const handleDelete = async (id) => {
     try {
-      await fetch(`http://localhost:3000/${selectedTable}/${id}`, {
-        method: "DELETE",
-      });
-      fetchData();
+      await api.delete(`/${selectedTable}/${id}`);
+      const res = await api.get(`/${selectedTable}`);
+      setData(res.data);
     } catch (err) {
-      console.error("Error deleting record:", err);
+      console.error("Error deleting record:", err.response || err);
     }
   };
 
@@ -97,22 +125,19 @@ export default function Tables() {
         >
           <option value="">-- Select a Table --</option>
           {tables.map((table) => (
-            <option key={table} value={table}>
-              {table}
-            </option>
+            <option key={table} value={table}>{table}</option>
           ))}
         </select>
       </div>
 
-        <div className="flex justify-end max-w-6xl mx-auto mb-4">
-          <button
-            onClick={() => openForm("add")}
-            className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:scale-105 transition"
-          >
-            ➕ Add Record
-          </button>
-        </div>
-      
+      <div className="flex justify-end max-w-6xl mx-auto mb-4">
+        <button
+          onClick={() => openForm("add")}
+          className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:scale-105 transition"
+        >
+          ➕ Add Record
+        </button>
+      </div>
 
       {/* Table Display */}
       {loading ? (
@@ -122,41 +147,23 @@ export default function Tables() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#334155] text-[hsl(200,100%,70%)]">
-                {Object.keys(data[0]).map((col) => (
-                  <th key={col} className="p-4 capitalize">
-                    {col}
-                  </th>
+                {Object.keys(data[0] || {}).map((col) => (
+                  <th key={col} className="p-4 capitalize">{col.replace(/_/g, " ")}</th>
                 ))}
                 <th className="p-4">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {data.map((row, i) => (
-                <tr
-                  key={i}
-                  className="border-b border-gray-700 hover:bg-[#2d3b52] transition-colors"
-                >
+              {data.map((row) => (
+                <tr key={row[Object.keys(row)[0]]} className="border-b border-gray-700 hover:bg-[#2d3b52] transition-colors">
                   {Object.values(row).map((val, j) => (
-                    <td key={j} className="p-4">
-                      {val !== null ? val.toString() : "—"}
-                    </td>
+                    <td key={j} className="p-4">{val !== null ? val.toString() : "—"}</td>
                   ))}
                   <td className="p-4 space-x-2">
-                    {/* Hide Update for transactions */}
                     {selectedTable !== "transactions" && (
-                      <button
-                        onClick={() => openForm("update", row)}
-                        className="px-3 py-1 bg-yellow-500 text-black rounded-lg hover:scale-105 transition"
-                      >
-                        Update
-                      </button>
+                      <button onClick={() => openForm("update", row)} className="px-3 py-1 bg-yellow-500 text-black rounded-lg hover:scale-105 transition">Update</button>
                     )}
-                    <button
-                      onClick={() => handleDelete(row[Object.keys(row)[0]])}
-                      className="px-3 py-1 bg-red-500 text-white rounded-lg hover:scale-105 transition"
-                    >
-                      Delete
-                    </button>
+                    <button onClick={() => handleDelete(row[Object.keys(row)[0]])} className="px-3 py-1 bg-red-500 text-white rounded-lg hover:scale-105 transition">Delete</button>
                   </td>
                 </tr>
               ))}
@@ -169,42 +176,44 @@ export default function Tables() {
         <p className="text-center text-gray-400">Select a table to view data.</p>
       )}
 
-      {/* Form Modal (not for transactions) */}
-      {showForm && selectedTable !== "transactions" && (
+      {/* Form Modal */}
+      {showForm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
           <div className="bg-[#1e293b] p-6 rounded-2xl shadow-xl w-96">
             <h3 className="text-xl font-bold mb-4 capitalize">
-              {formMode} {selectedTable} record
+              {formMode} {selectedTable.endsWith('s') ? selectedTable.slice(0, -1) : selectedTable} Record
             </h3>
-
-            {Object.keys(data[0] || {}).map((col) =>
-              col.includes("id") || col.includes("created_at") ? null : (
-                <div key={col} className="mb-3">
-                  <label className="block text-sm mb-1 capitalize">{col}</label>
-                  <input
-                    type="text"
-                    name={col}
-                    value={formData[col] || ""}
+            
+            {(tableSchemas[selectedTable] || []).map((field) => (
+              <div key={field.name} className="mb-3">
+                <label className="block text-sm mb-1 capitalize">{field.name.replace("_", " ")}</label>
+                {/* CHANGED: Conditionally render a dropdown for the transaction_type field */}
+                {field.type === 'select' ? (
+                  <select
+                    name={field.name}
+                    value={formData[field.name] || ""}
                     onChange={handleChange}
                     className="w-full px-3 py-2 rounded-lg text-black"
+                  >
+                    <option value="">-- Select Type --</option>
+                    {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type={field.type}
+                    name={field.name}
+                    value={formData[field.name] || ""}
+                    onChange={handleChange}
+                    placeholder={field.placeholder || ""}
+                    className="w-full px-3 py-2 rounded-lg text-black"
                   />
-                </div>
-              )
-            )}
+                )}
+              </div>
+            ))}
 
             <div className="flex justify-end gap-3 mt-4">
-              <button
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2 bg-gray-500 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                className="px-4 py-2 bg-[hsl(200,100%,70%)] rounded-lg font-bold"
-              >
-                Save
-              </button>
+              <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-500 rounded-lg">Cancel</button>
+              <button onClick={handleSubmit} className="px-4 py-2 bg-[hsl(200,100%,70%)] rounded-lg font-bold">Save</button>
             </div>
           </div>
         </div>
